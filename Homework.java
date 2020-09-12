@@ -1,5 +1,5 @@
 // Michael Imbro
-// IT 114 HW 1
+// IT 114 Java Data HW
 // 9/14/2020
 
 public class Homework {
