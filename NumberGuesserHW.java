@@ -50,7 +50,16 @@ public class NumberGuesserHW {
 		if (message.equalsIgnoreCase("quit")) {
 			System.out.println("Tired of playing? No problem, see you next time.");
 			isRunning = false;
+         saveLevel();
+      
 		}
+      else if (message.equalsIgnoreCase("reset")) {
+         System.out.println("Alright, let's go back to level 1.");
+         level = 1;
+         strikes = 0;
+         saveLevel();
+         number = this.getNumber(1);
+      }
 	}
 
 	private void processGuess(int guess) {
@@ -79,6 +88,9 @@ public class NumberGuesserHW {
 
 	private int getGuess(String message) {
 		int guess = -1;
+      if (message.equalsIgnoreCase("reset")) {
+         return guess;
+      }
 		try {
 			guess = Integer.parseInt(message);
 		} catch (NumberFormatException e) {
@@ -90,7 +102,7 @@ public class NumberGuesserHW {
 
 	private void saveLevel() {
 		try (FileWriter fw = new FileWriter(saveFile)) {
-			fw.write("" + level);// here we need to convert it to a String to record correctly
+			fw.write("" + level + " " + strikes + " " + number);// here we need to convert it to a String to record correctly
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -103,12 +115,13 @@ public class NumberGuesserHW {
 			return false;
 		}
 		try (Scanner reader = new Scanner(file)) {
-			while (reader.hasNextLine()) {
+			if (reader.hasNextLine()) {
 				int _level = reader.nextInt();
 				if (_level > 1) {
 					level = _level;
-					break;
 				}
+            strikes = reader.nextInt();
+            number = reader.nextInt();
 			}
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
@@ -117,17 +130,23 @@ public class NumberGuesserHW {
 			e2.printStackTrace();
 			return false;
 		}
-		return level > 1;
+		return true;
 	}
 
 	void run() {
 		try (Scanner input = new Scanner(System.in);) {
 			System.out.println("Welcome to Number Guesser 4.0!");
-			System.out.println("I'll ask you to guess a number between a range, and you'll have " + maxStrikes
-					+ " attempts to guess.");
 			if (loadLevel()) {
-				System.out.println("Successfully loaded level " + level + " let's continue then");
+				System.out.println("Successfully loaded level " + level);
 			}
+         if (strikes > 0) {
+            System.out.println("Let's pick up where you left off! You have " + (maxStrikes - strikes) + " guesses remaining!");
+         }
+         else {
+			   System.out.println("I'll ask you to guess a number between a range, and you'll have " + maxStrikes
+					+ " attempts to guess.");
+         }
+
 			number = getNumber(level);
 			isRunning = true;
 			while (input.hasNext()) {
@@ -147,7 +166,7 @@ public class NumberGuesserHW {
 	}
 
 	public static void main(String[] args) {
-		NumberGuesserPart4 guesser = new NumberGuesserPart4();
+		NumberGuesserHW guesser = new NumberGuesserHW();
 		guesser.run();
 	}
 }
