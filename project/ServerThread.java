@@ -1,4 +1,4 @@
-import java.io.IOException;
+import java.io.IOException; 
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
@@ -11,6 +11,11 @@ public class ServerThread extends Thread {
 	private ObjectOutputStream out;
 	private boolean isRunning = false;
 	private Room currentRoom;
+	private String clientName;
+	
+	public String getClientName() {
+		return clientName;
+	}
 	
 	protected synchronized Room getCurrentRoom() {
 		return currentRoom;
@@ -31,6 +36,7 @@ public class ServerThread extends Thread {
 		in = new ObjectInputStream(client.getInputStream());
 	}
 	
+	@Deprecated
 	public boolean send(String message) {
 		try {
 			out.writeObject(message);
@@ -43,57 +49,129 @@ public class ServerThread extends Thread {
 		}
 	}
 	
-	@Override
-	public void run( ) {
+	//New version of send:
+	protected boolean send(String clientName, String message) {
+		Payload payload = new Payload();
+		payload.setPayloadType(PayloadType.MESSAGE);
+		payload.setClientName(clientName);
+		payload.setMessage(message);
+		return sendPayload(payload);
+	}
+	
+    protected boolean sendConnectionStatus(String clientName, boolean isConnect) {
+		Payload payload = new Payload();
+		if (isConnect) {
+		    payload.setPayloadType(PayloadType.CONNECT);
+		}
+		else {
+		    payload.setPayloadType(PayloadType.DISCONNECT);
+		}
+		payload.setClientName(clientName);
+		return sendPayload(payload);
+    }
+	
+	private boolean sendPayload(Payload p) {
 		try {
-			isRunning = true;
-			String fromClient;
-			while (isRunning &&
-					!client.isClosed() 
-					&& (fromClient = (String) in.readObject())!= null) {
-				System.out.println("Received from client: " + fromClient);
-				currentRoom.sendMessage(this, fromClient);
-			}
-		} catch (Exception e) {
+			out.writeObject(p);
+			return true;
+		}
+		catch (IOException e) {
+			Debug.log("Error sending message to client (most likely disconnected)");
 			e.printStackTrace();
-			Debug.log("Client Disconnected");
-		} finally {
-			isRunning = false;
-			Debug.log("Cleaning up connection for ServerThread");
 			cleanup();
+			return false;
 		}
 	}
 	
-	private void cleanup( ) {
-		if (currentRoom != null ) {
-			Debug.log(getName() + " removing self from room " + currentRoom.getName());
-			currentRoom.removeClient(this);
+    private void processPayload(Payload p) {
+		switch (p.getPayloadType()) {
+		case CONNECT:
+		    // here we'll fetch a clientName from our client
+		    String n = p.getClientName();
+		    if (n != null) {
+				clientName = n;
+				Debug.log("Set our name to " + clientName);
+				if (currentRoom != null) {
+				    currentRoom.joinLobby(this);
+				}
+		    }
+		    break;
+		case DISCONNECT:
+		    isRunning = false;// this will break the while loop in run() and clean everything up
+		    break;
+		case MESSAGE:
+		    currentRoom.sendMessage(this, p.getMessage());
+		    break;
+		default:
+		    Debug.log("Unhandled payload on server: " + p);
+		    break;
 		}
-		if (in != null ) {
-			try {
-				in.close();
-			} catch (IOException e) {
-				Debug.log("Input already closed");
-			}
+    }
+	
+    @Override
+    public void run() {
+		try {
+		    isRunning = true;
+		    Payload fromClient;
+		    while (isRunning &&
+			    !client.isClosed() // breaks the loop if our connection closes
+			    && (fromClient = (Payload) in.readObject()) != null) {
+					System.out.println("Received from client: " + fromClient);
+					processPayload(fromClient);
+		    } // end of loop
 		}
-		if (out != null ) {
-			try {
-				out.close();
-			} catch (IOException e) {
-				Debug.log("Client already closed");
-			}
+		catch (Exception e) {
+		    // happens when client disconnects
+		    e.printStackTrace();
+		    Debug.log("Client Disconnected");
 		}
-		if (client != null && !client.isClosed()) {
-			try {
-				client.shutdownInput();
-			} catch (IOException e) {
-				Debug.log("Socket/Input already closed");
-			}
-			try {
-				client.shutdownOutput();
-			} catch (IOException e) {
-				Debug.log("Client already closed");
-			}
+		finally {
+		    isRunning = false;
+		    Debug.log("Cleaning up connection for ServerThread");
+		    cleanup();
 		}
-	}
+    }
+	
+    private void cleanup() {
+    	if (currentRoom != null) {
+    	    Debug.log(getName() + " removing self from room " + currentRoom.getName());
+    	    currentRoom.removeClient(this);
+    	}
+    	if (in != null) {
+    	    try {
+    		in.close();
+    	    }
+    	    catch (IOException e) {
+    		Debug.log("Input already closed");
+    	    }
+    	}
+    	if (out != null) {
+    	    try {
+    		out.close();
+    	    }
+    	    catch (IOException e) {
+    		Debug.log("Client already closed");
+    	    }
+    	}
+    	if (client != null && !client.isClosed()) {
+    	    try {
+    		client.shutdownInput();
+    	    }
+    	    catch (IOException e) {
+    		Debug.log("Socket/Input already closed");
+    	    }
+    	    try {
+    		client.shutdownOutput();
+    	    }
+    	    catch (IOException e) {
+    		Debug.log("Socket/Output already closed");
+    	    }
+    	    try {
+    		client.close();
+    	    }
+    	    catch (IOException e) {
+    		Debug.log("Client already closed");
+    	    }
+    	}
+        }
 }
