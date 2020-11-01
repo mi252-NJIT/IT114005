@@ -1,11 +1,15 @@
-import java.io.IOException; 
+package server;
+import java.io.IOException;   
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-import utils.Debug;
+
 
 public class ServerThread extends Thread {
+	private final static Logger log = Logger.getLogger(ServerThread.class.getName());
 	private Socket client;
 	private ObjectInputStream in;
 	private ObjectOutputStream out;
@@ -25,7 +29,7 @@ public class ServerThread extends Thread {
 		if (room != null) {
 			currentRoom = room;
 		} else {
-			Debug.log("Passed in room was null, this shouldn't happen");
+			log.log(Level.INFO,"Passed in room was null, this shouldn't happen");
 		}
 	}
 	
@@ -42,7 +46,7 @@ public class ServerThread extends Thread {
 			out.writeObject(message);
 			return true;
 		} catch (IOException e ) {
-			Debug.log("Error sending message to client (most likely disconnected)");
+			log.log(Level.INFO,"Error sending message to client (most likely disconnected)");
 			e.printStackTrace();
 			cleanup();
 			return false;
@@ -76,7 +80,7 @@ public class ServerThread extends Thread {
 			return true;
 		}
 		catch (IOException e) {
-			Debug.log("Error sending message to client (most likely disconnected)");
+			log.log(Level.INFO,"Error sending message to client (most likely disconnected)");
 			e.printStackTrace();
 			cleanup();
 			return false;
@@ -90,7 +94,7 @@ public class ServerThread extends Thread {
 		    String n = p.getClientName();
 		    if (n != null) {
 				clientName = n;
-				Debug.log("Set our name to " + clientName);
+				log.log(Level.INFO,"Set our name to " + clientName);
 				if (currentRoom != null) {
 				    currentRoom.joinLobby(this);
 				}
@@ -103,7 +107,7 @@ public class ServerThread extends Thread {
 		    currentRoom.sendMessage(this, p.getMessage());
 		    break;
 		default:
-		    Debug.log("Unhandled payload on server: " + p);
+		    log.log(Level.INFO,"Unhandled payload on server: " + p);
 		    break;
 		}
     }
@@ -123,18 +127,18 @@ public class ServerThread extends Thread {
 		catch (Exception e) {
 		    // happens when client disconnects
 		    e.printStackTrace();
-		    Debug.log("Client Disconnected");
+		    log.log(Level.INFO,"Client Disconnected");
 		}
 		finally {
 		    isRunning = false;
-		    Debug.log("Cleaning up connection for ServerThread");
+		    log.log(Level.INFO,"Cleaning up connection for ServerThread");
 		    cleanup();
 		}
     }
 	
     private void cleanup() {
     	if (currentRoom != null) {
-    	    Debug.log(getName() + " removing self from room " + currentRoom.getName());
+    	    log.log(Level.INFO,getName() + " removing self from room " + currentRoom.getName());
     	    currentRoom.removeClient(this);
     	}
     	if (in != null) {
@@ -142,7 +146,7 @@ public class ServerThread extends Thread {
     		in.close();
     	    }
     	    catch (IOException e) {
-    		Debug.log("Input already closed");
+    		log.log(Level.INFO,"Input already closed");
     	    }
     	}
     	if (out != null) {
@@ -150,7 +154,7 @@ public class ServerThread extends Thread {
     		out.close();
     	    }
     	    catch (IOException e) {
-    		Debug.log("Client already closed");
+    		log.log(Level.INFO,"Client already closed");
     	    }
     	}
     	if (client != null && !client.isClosed()) {
@@ -158,19 +162,19 @@ public class ServerThread extends Thread {
     		client.shutdownInput();
     	    }
     	    catch (IOException e) {
-    		Debug.log("Socket/Input already closed");
+    		log.log(Level.INFO,"Socket/Input already closed");
     	    }
     	    try {
     		client.shutdownOutput();
     	    }
     	    catch (IOException e) {
-    		Debug.log("Socket/Output already closed");
+    		log.log(Level.INFO,"Socket/Output already closed");
     	    }
     	    try {
     		client.close();
     	    }
     	    catch (IOException e) {
-    		Debug.log("Client already closed");
+    		log.log(Level.INFO,"Client already closed");
     	    }
     	}
         }
