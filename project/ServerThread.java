@@ -62,17 +62,26 @@ public class ServerThread extends Thread {
 		return sendPayload(payload);
 	}
 	
-    protected boolean sendConnectionStatus(String clientName, boolean isConnect) {
+    protected boolean sendConnectionStatus(String clientName, boolean isConnect, String message) {
 		Payload payload = new Payload();
 		if (isConnect) {
 		    payload.setPayloadType(PayloadType.CONNECT);
+		    payload.setMessage(message);
 		}
 		else {
 		    payload.setPayloadType(PayloadType.DISCONNECT);
+		    payload.setMessage(message);
 		}
 		payload.setClientName(clientName);
 		return sendPayload(payload);
     }
+    
+    protected boolean sendClearList() {
+		Payload payload = new Payload();
+		payload.setPayloadType(PayloadType.CLEAR_PLAYERS);
+		return sendPayload(payload);
+    }
+
 	
 	private boolean sendPayload(Payload p) {
 		try {
