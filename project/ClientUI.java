@@ -1,3 +1,4 @@
+
 package client;
 
 import java.awt.BorderLayout;
@@ -5,6 +6,8 @@ import java.awt.CardLayout;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FontMetrics;
+import java.awt.Point;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
@@ -21,6 +24,9 @@ import javax.swing.JButton;
 import javax.swing.JEditorPane;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
@@ -39,10 +45,30 @@ public class ClientUI extends JFrame implements Event {
     JPanel userPanel;
     List<User> users = new ArrayList<User>();
     private final static Logger log = Logger.getLogger(ClientUI.class.getName());
+    Dimension windowSize = Toolkit.getDefaultToolkit().getScreenSize();
+    String username;
+    RoomsPanel roomsPanel;
+    JMenuBar menu;
 
     public ClientUI(String title) {
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setPreferredSize(new Dimension(400, 400));
+		menu = new JMenuBar();
+		JMenu roomsMenu = new JMenu("Rooms");
+		JMenuItem roomsSearch = new JMenuItem("Search");
+		roomsSearch.addActionListener(new ActionListener() {
+		    @Override
+		    public void actionPerformed(ActionEvent e) {
+				System.out.println("clicked");
+				goToPanel("rooms");
+		    }
+	
+		});
+		roomsMenu.add(roomsSearch);
+		menu.add(roomsMenu);
+		windowSize.width *= .8;
+		windowSize.height *= .8;
+		setPreferredSize(windowSize);
+		setSize(windowSize);// This is needed for setLocationRelativeTo()
 		setLocationRelativeTo(null);
 		self = this;
 		setTitle(title);
@@ -50,11 +76,14 @@ public class ClientUI extends JFrame implements Event {
 		setLayout(card);
 		createConnectionScreen();
 		createUserInputScreen();
+	
 		createPanelRoom();
 		createPanelUserList();
+		this.setJMenuBar(menu);
+		// TODO remove
+		createRoomsPanel();
 		showUI();
     }
-
     void createConnectionScreen() {
 		JPanel panel = new JPanel();
 		panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
@@ -71,27 +100,27 @@ public class ClientUI extends JFrame implements Event {
 	
 		    @Override
 		    public void actionPerformed(ActionEvent e) {
-			String _host = host.getText();
-			String _port = port.getText();
-			if (_host.length() > 0 && _port.length() > 0) {
-			    try {
-				connect(_host, _port);
-				self.next();
-			    }
-			    catch (IOException e1) {
-				e1.printStackTrace();
-				// TODO handle error properly
-				log.log(Level.SEVERE, "Error connecting");
-			    }
-			}
+				String _host = host.getText();
+				String _port = port.getText();
+				if (_host.length() > 0 && _port.length() > 0) {
+				    try {
+						connect(_host, _port);
+						self.next();
+				    }
+				    catch (IOException e1) {
+						e1.printStackTrace();
+						// TODO handle error properly
+						log.log(Level.SEVERE, "Error connecting");
+				    }
+				}
 		    }
 	
 		});
 		panel.add(button);
 		this.add(panel);
-	    }
+	}
 	
-	    void createUserInputScreen() {
+    void createUserInputScreen() {
 		JPanel panel = new JPanel();
 		panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
 		JLabel userLabel = new JLabel("Username:");
@@ -99,15 +128,22 @@ public class ClientUI extends JFrame implements Event {
 		panel.add(userLabel);
 		panel.add(username);
 		JButton button = new JButton("Join");
+		ClientUI self = this;
 		button.addActionListener(new ActionListener() {
 	
 		    @Override
 		    public void actionPerformed(ActionEvent e) {
-			String name = username.getText();
-			if (name != null && name.length() > 0) {
-			    SocketClient.setUsername(name);
-			    self.next();
-			}
+				String name = username.getText();
+				if (name != null && name.length() > 0) {
+				    // need external ref since "this" context is the action event, not ClientUI
+				    self.username = name;
+				    // this order matters
+				    pack();
+				    self.setTitle(self.getTitle() + " - " + self.username);
+				    SocketClient.INSTANCE.setUsername(self.username);
+	
+				    self.next();
+				}
 		    }
 	
 		});
@@ -135,7 +171,7 @@ public class ClientUI extends JFrame implements Event {
 		text.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "sendAction");
 		text.getActionMap().put("sendAction", new AbstractAction() {
 		    public void actionPerformed(ActionEvent actionEvent) {
-			button.doClick();
+				button.doClick();
 		    }
 		});
 	
@@ -143,33 +179,44 @@ public class ClientUI extends JFrame implements Event {
 	
 		    @Override
 		    public void actionPerformed(ActionEvent e) {
-			if (text.getText().length() > 0) {
-			    SocketClient.sendMessage(text.getText());
-			    text.setText("");
-			}
+				if (text.getText().length() > 0) {
+				    SocketClient.sendMessage(text.getText());
+				    text.setText("");
+				}
 		    }
 	
 		});
 		input.add(button);
 		panel.add(input, BorderLayout.SOUTH);
-		this.add(panel);
+		this.add(panel, "lobby");
     }
 
-    void createPanelUserList() {
-		JPanel panel = new JPanel();
-		panel.setLayout(new BorderLayout());
-		userPanel = new JPanel();
-		userPanel.setPreferredSize(new Dimension(100, userPanel.getSize().height));
-		JScrollPane scroll = new JScrollPane(userPanel);
-		scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
-		scroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
-		panel.add(scroll, BorderLayout.CENTER);
-		textArea.getParent().getParent().getParent().add(panel, BorderLayout.EAST);
-    }
+	    void createPanelUserList() {
+	    	userPanel = new JPanel();
+	    	userPanel.setLayout(new BoxLayout(userPanel, BoxLayout.Y_AXIS));
+	    	userPanel.setAlignmentY(Component.TOP_ALIGNMENT);
+
+	    	JScrollPane scroll = new JScrollPane(userPanel);
+	    	scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+	    	scroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+
+	    	Dimension d = new Dimension(100, windowSize.height);
+	    	scroll.setPreferredSize(d);
+
+	    	textArea.getParent().getParent().getParent().add(scroll, BorderLayout.EAST);
+	        }
+	    
+	void createRoomsPanel() {
+		roomsPanel = new RoomsPanel(this);
+	    this.add(roomsPanel, "rooms");
+	}
 
     void addClient(String name) {
 		User u = new User(name);
-		u.setPreferredSize(new Dimension(userPanel.getSize().width, 30));
+		Dimension p = new Dimension(userPanel.getSize().width, 30);
+		u.setPreferredSize(p);
+		u.setMinimumSize(p);
+		u.setMaximumSize(p);
 		userPanel.add(u);
 		users.add(u);
 		pack();
@@ -207,7 +254,7 @@ public class ClientUI extends JFrame implements Event {
     void addMessage(String str) {
 		JEditorPane entry = new JEditorPane();
 		entry.setEditable(false);
-		entry.setLayout(null);
+		// entry.setLayout(null);
 		entry.setText(str);
 		Dimension d = new Dimension(textArea.getSize().width, calcHeightForText(str));
 		// attempt to lock all dimensions
@@ -217,10 +264,11 @@ public class ClientUI extends JFrame implements Event {
 		textArea.add(entry);
 	
 		pack();
-		System.out.println(entry.getSize());
+		// System.out.println(entry.getSize());
 		JScrollBar sb = ((JScrollPane) textArea.getParent().getParent()).getVerticalScrollBar();
 		sb.setValue(sb.getMaximum());
     }
+
 
     void next() {
 		card.next(this.getContentPane());
@@ -229,18 +277,35 @@ public class ClientUI extends JFrame implements Event {
     void previous() {
 		card.previous(this.getContentPane());
     }
+    
+    void goToPanel(String panel) {
+		switch (panel) {
+			case "rooms":
+			    // TODO get rooms
+			    roomsPanel.removeAllRooms();
+			    SocketClient.INSTANCE.sendGetRooms(null);
+			    break;
+			default:
+			    // no need to react
+			    break;
+		}
+		card.show(this.getContentPane(), panel);
+    }
 
     void connect(String host, String port) throws IOException {
-		SocketClient.callbackListener(this);
-		SocketClient.connectAndStart(host, port);
+    	SocketClient.INSTANCE.registerCallbackListener(this);
+		SocketClient.INSTANCE.connectAndStart(host, port);
     }
 
     void showUI() {
 		pack();
 		Dimension lock = textArea.getSize();
 		textArea.setMaximumSize(lock);
+		lock = userPanel.getSize();
+		userPanel.setMaximumSize(lock);
 		setVisible(true);
     }
+
 
     @Override
     public void onClientConnect(String clientName, String message) {
@@ -258,10 +323,10 @@ public class ClientUI extends JFrame implements Event {
 		while (iter.hasNext()) {
 		    User u = iter.next();
 		    if (u.getName() == clientName) {
-			removeClient(u);
-			iter.remove();
-			self.addMessage(String.format("%s: %s", clientName, message));
-			break;
+				removeClient(u);
+				iter.remove();
+				self.addMessage(String.format("%s: %s", clientName, message));
+				break;
 		    }
 	
 		}
@@ -272,6 +337,12 @@ public class ClientUI extends JFrame implements Event {
 		log.log(Level.INFO, String.format("%s: %s", clientName, message));
 		self.addMessage(String.format("%s: %s", clientName, message));
     }
+    
+    @Override
+    public void onCommandOutputReceive(String message) {
+		log.log(Level.INFO, message);
+		self.addMessage(message);
+    }
 
     @Override
     public void onChangeRoom() {
@@ -281,12 +352,33 @@ public class ClientUI extends JFrame implements Event {
 		    removeClient(u);
 		    iter.remove();
 		}
+		goToPanel("lobby");
     }
 
     public static void main(String[] args) {
 		ClientUI ui = new ClientUI("My UI");
 		if (ui != null) {
 		    log.log(Level.FINE, "Started");
+		}
+    }
+    @Override
+    public void onSyncDirection(String clientName, Point direction) {
+		// TODO Auto-generated method stub
+		// no need to sync this for ClientUI
+    }
+
+    @Override
+    public void onSyncPosition(String clientName, Point position) {
+		// TODO Auto-generated method stub
+		// no need to sync this for ClientUI
+    }
+
+    @Override
+    public void onGetRoom(String roomName) {
+		// TODO Auto-generated method stub
+		if (roomsPanel != null) {
+		    roomsPanel.addRoom(roomName);
+		    pack();
 		}
     }
 }

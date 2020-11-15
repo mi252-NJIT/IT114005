@@ -1,10 +1,11 @@
 
 package server;
-import java.util.ArrayList; 
+import java.util.ArrayList;  
 import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.Random;
 
 
 public class Room implements AutoCloseable {
@@ -16,6 +17,7 @@ public class Room implements AutoCloseable {
 	private final static String COMMAND_TRIGGER = "/";
 	private final static String CREATE_ROOM = "createroom";
 	private final static String JOIN_ROOM = "joinroom";
+	private final static String FLIP = "flip";
 	
 	public Room(String name) {
 		this.name = name;
@@ -101,25 +103,61 @@ public class Room implements AutoCloseable {
 			}
 			String roomName;
 			switch (command) {
-			case CREATE_ROOM:
-			    roomName = comm2[1];
-			    if (server.createNewRoom(roomName)) {
-				joinRoom(roomName, client);
-			    }
-			    wasCommand = true;
-			    break;
-			case JOIN_ROOM:
-			    roomName = comm2[1];
-			    joinRoom(roomName, client);
-			    wasCommand = true;
-			    break;
-			}
+				case CREATE_ROOM:
+				    roomName = comm2[1];
+				    if (server.createNewRoom(roomName)) {
+					joinRoom(roomName, client);
+				    }
+				    wasCommand = true;
+				    break;
+				case JOIN_ROOM:
+				    roomName = comm2[1];
+				    joinRoom(roomName, client);
+				    wasCommand = true;
+				    break;
+				case FLIP:
+					flip(client);
+					wasCommand = true;
+					break;
+				}
 		    }
 		}
 		catch (Exception e) {
 		    e.printStackTrace();
 		}
 		return wasCommand;
+    }
+    
+    protected void flip(ServerThread client) {
+    	Random rng = new Random();
+    	int flipIntResult = rng.nextInt(2);
+    	String flipStringResult = "";
+    	switch (flipIntResult) {
+    		case 0:
+    			flipStringResult = "Tails!";
+    			break;
+    		case 1:
+    			flipStringResult = "Heads!";
+    			break;
+    		default:
+    			log.log(Level.INFO, "Error calculating flip result: No cases matched");
+    			return;
+    	}
+    	log.log(Level.INFO, "flipped coin for " + client.getClientName());
+    	broadcastCommandResult(client, client.getClientName() + " flips a coin: " + flipStringResult);
+    	
+    }
+    
+    protected void broadcastCommandResult(ServerThread client, String message ) {
+		Iterator<ServerThread> iter = clients.iterator();
+		while (iter.hasNext()) {
+		    ServerThread c = iter.next();
+		    boolean messageSent = c.sendCommandOutput(client.getClientName(), message);
+		    if (!messageSent) {
+				iter.remove();
+				log.log(Level.INFO, "Removed client " + c.getId());
+		    }
+		}
     }
     
     protected void sendConnectionStatus(ServerThread client, boolean isConnect, String message) {
@@ -149,6 +187,10 @@ public class Room implements AutoCloseable {
 			log.log(Level.INFO,"Removed client " + client.getId());
 		    }
 		}
+    }
+    
+    public List<String> getRooms() {
+		return server.getRooms();
     }
 	
     @Override

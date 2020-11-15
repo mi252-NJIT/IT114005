@@ -1,8 +1,12 @@
 package server;
-import java.io.IOException;   
+
+import java.awt.Point;
+import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
+import java.util.Iterator;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -44,6 +48,8 @@ public class ServerThread extends Thread {
 	public boolean send(String message) {
 		try {
 			out.writeObject(message);
+			log.log(Level.INFO,"This text was created by the old send method in ServerThread.java. "
+					+ "You shouldn't see this unless the send method is being used when it shouldn't be.");
 			return true;
 		} catch (IOException e ) {
 			log.log(Level.INFO,"Error sending message to client (most likely disconnected)");
@@ -60,6 +66,15 @@ public class ServerThread extends Thread {
 		payload.setClientName(clientName);
 		payload.setMessage(message);
 		return sendPayload(payload);
+	}
+	
+	protected boolean sendCommandOutput(String clientName, String message) {
+		Payload payload = new Payload();
+		payload.setPayloadType(PayloadType.COMMAND_OUTPUT);
+		payload.setClientName(clientName);
+		payload.setMessage(message);
+		return sendPayload(payload);
+		
 	}
 	
     protected boolean sendConnectionStatus(String clientName, boolean isConnect, String message) {
@@ -82,6 +97,12 @@ public class ServerThread extends Thread {
 		return sendPayload(payload);
     }
 
+    protected boolean sendRoom(String room) {
+		Payload payload = new Payload();
+		payload.setPayloadType(PayloadType.GET_ROOMS);
+		payload.setMessage(room);
+		return sendPayload(payload);
+    }
 	
 	private boolean sendPayload(Payload p) {
 		try {
@@ -96,30 +117,51 @@ public class ServerThread extends Thread {
 		}
 	}
 	
-    private void processPayload(Payload p) {
-		switch (p.getPayloadType()) {
-		case CONNECT:
-		    // here we'll fetch a clientName from our client
-		    String n = p.getClientName();
-		    if (n != null) {
-				clientName = n;
-				log.log(Level.INFO,"Set our name to " + clientName);
-				if (currentRoom != null) {
-				    currentRoom.joinLobby(this);
+	 private void processPayload(Payload p) {
+			switch (p.getPayloadType()) {
+				case CONNECT:
+				    // here we'll fetch a clientName from our client
+				    String n = p.getClientName();
+				    if (n != null) {
+						clientName = n;
+						log.log(Level.INFO, "Set our name to " + clientName);
+						if (currentRoom != null) {
+						    currentRoom.joinLobby(this);
+						}
+				    }
+				    break;
+				case DISCONNECT:
+				    isRunning = false;// this will break the while loop in run() and clean everything up
+				    break;
+				case MESSAGE:
+				    currentRoom.sendMessage(this, p.getMessage());
+				    break;
+				case CLEAR_PLAYERS:
+				    // we currently don't need to do anything since the UI/Client won't be sending
+				    // this
+				    break;
+				case GET_ROOMS:
+				    // far from efficient but it works for example sake
+				    List<String> roomNames = currentRoom.getRooms();
+				    Iterator<String> iter = roomNames.iterator();
+				    while (iter.hasNext()) {
+						String room = iter.next();
+						if (room != null && !room.equalsIgnoreCase(currentRoom.getName())) {
+						    if (!sendRoom(room)) {
+							// if an error occurs stop spamming
+							break;
+						    }
+						}
+				    }
+				    break;
+				case JOIN_ROOM:
+				    currentRoom.joinRoom(p.getMessage(), this);
+				    break;
+				default:
+				    log.log(Level.INFO, "Unhandled payload on server: " + p);
+				    break;
 				}
 		    }
-		    break;
-		case DISCONNECT:
-		    isRunning = false;// this will break the while loop in run() and clean everything up
-		    break;
-		case MESSAGE:
-		    currentRoom.sendMessage(this, p.getMessage());
-		    break;
-		default:
-		    log.log(Level.INFO,"Unhandled payload on server: " + p);
-		    break;
-		}
-    }
 	
     @Override
     public void run() {
@@ -168,22 +210,22 @@ public class ServerThread extends Thread {
     	}
     	if (client != null && !client.isClosed()) {
     	    try {
-    		client.shutdownInput();
+    	    	client.shutdownInput();
     	    }
     	    catch (IOException e) {
-    		log.log(Level.INFO,"Socket/Input already closed");
+    	    	log.log(Level.INFO,"Socket/Input already closed");
     	    }
     	    try {
-    		client.shutdownOutput();
+    	    	client.shutdownOutput();
     	    }
     	    catch (IOException e) {
-    		log.log(Level.INFO,"Socket/Output already closed");
+    	    	log.log(Level.INFO,"Socket/Output already closed");
     	    }
     	    try {
-    		client.close();
+    	    	client.close();
     	    }
     	    catch (IOException e) {
-    		log.log(Level.INFO,"Client already closed");
+    	    	log.log(Level.INFO,"Client already closed");
     	    }
     	}
         }
