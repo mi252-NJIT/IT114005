@@ -95,6 +95,19 @@ public class SocketServer {
 		return lobby;
 	}
 	
+    protected List<String> getRooms() {
+		// not the most efficient way to do it, but it works
+		List<String> roomNames = new ArrayList<String>();
+		Iterator<Room> iter = rooms.iterator();
+		while (iter.hasNext()) {
+		    Room r = iter.next();
+		    if (r != null && r.getName() != null) {
+				roomNames.add(r.getName());
+		    }
+		}
+		return roomNames;
+    }
+	
 	protected void joinLobby(ServerThread client) {
 		Room prelobby = client.getCurrentRoom();
 		if (joinRoom(LOBBY, client)) {
