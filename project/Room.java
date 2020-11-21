@@ -254,6 +254,7 @@ public class Room implements AutoCloseable {
 			while (message.indexOf(currentCharacter.substring(currentCharacter.length() - 1)) != -1) {
 				if (i == 0) {
 					message = message.replaceFirst(currentCharacter, "<" + currentTag + ">");			//replaces evenly numbered occurrences of a character with an html tag
+					i++;
 				} else if (i == 1) {
 					message = message.replaceFirst(currentCharacter, "</" + currentTag + ">");			//replaces oddly numbered occurrences of a character with an html close tag
 					i = 0;
