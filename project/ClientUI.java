@@ -1,8 +1,9 @@
 
 package client;
 
-import java.awt.BorderLayout;
+import java.awt.BorderLayout; 
 import java.awt.CardLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FontMetrics;
@@ -33,6 +34,8 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.ScrollPaneConstants;
+import javax.swing.text.html.HTMLEditorKit;
+import javax.swing.text.html.StyleSheet;
 
 public class ClientUI extends JFrame implements Event {
     /**
@@ -92,12 +95,12 @@ public class ClientUI extends JFrame implements Event {
 		panel.add(hostLabel);
 		panel.add(host);
 		JLabel portLabel = new JLabel("Port:");
-		JTextField port = new JTextField("3000");
+		JTextField port = new JTextField("3099");
 		panel.add(portLabel);
 		panel.add(port);
 		JButton button = new JButton("Next");
-		button.addActionListener(new ActionListener() {
-	
+		
+		ActionListener onEnter = new ActionListener() {
 		    @Override
 		    public void actionPerformed(ActionEvent e) {
 				String _host = host.getText();
@@ -114,8 +117,11 @@ public class ClientUI extends JFrame implements Event {
 				    }
 				}
 		    }
-	
-		});
+		};
+		
+		button.addActionListener(onEnter); 
+		port.addActionListener(onEnter);
+		
 		panel.add(button);
 		this.add(panel);
 	}
@@ -129,8 +135,8 @@ public class ClientUI extends JFrame implements Event {
 		panel.add(username);
 		JButton button = new JButton("Join");
 		ClientUI self = this;
-		button.addActionListener(new ActionListener() {
-	
+		
+		ActionListener onEnter = new ActionListener() {
 		    @Override
 		    public void actionPerformed(ActionEvent e) {
 				String name = username.getText();
@@ -140,13 +146,15 @@ public class ClientUI extends JFrame implements Event {
 				    // this order matters
 				    pack();
 				    self.setTitle(self.getTitle() + " - " + self.username);
-				    SocketClient.INSTANCE.setUsername(self.username);
+				    SocketClient.setUsername(self.username);
 	
 				    self.next();
 				}
 		    }
-	
-		});
+		};
+		button.addActionListener(onEnter);
+		username.addActionListener(onEnter);
+		
 		panel.add(button);
 		this.add(panel);
 	    }
@@ -161,6 +169,12 @@ public class ClientUI extends JFrame implements Event {
 		JScrollPane scroll = new JScrollPane(textArea);
 		scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 		scroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+		// updated to be 30% of screen width
+		Dimension d = new Dimension((int) (windowSize.width * .3), windowSize.height);
+		scroll.setPreferredSize(d);
+		scroll.setMinimumSize(d);
+		scroll.setMaximumSize(d);
+		
 		panel.add(scroll, BorderLayout.CENTER);
 	
 		JPanel input = new JPanel();
@@ -251,12 +265,19 @@ public class ClientUI extends JFrame implements Event {
 		return size.height * mult;
     }
 
-    void addMessage(String str) {
+    void addMessage(String str, boolean isCommandOutput) {
 		JEditorPane entry = new JEditorPane();
+		
+		if (isCommandOutput) {
+			entry.setBackground(new Color(235, 235, 235));
+			str = "<b><i>" + str + "</b></i>";
+		}
 		entry.setEditable(false);
+		entry.setContentType("text/html");
 		// entry.setLayout(null);
 		entry.setText(str);
-		Dimension d = new Dimension(textArea.getSize().width, calcHeightForText(str));
+		int areaWidth = textArea.getSize().width;
+		Dimension d = new Dimension(areaWidth, calcHeightForText(str));
 		// attempt to lock all dimensions
 		entry.setMinimumSize(d);
 		entry.setPreferredSize(d);
@@ -264,9 +285,32 @@ public class ClientUI extends JFrame implements Event {
 		textArea.add(entry);
 	
 		pack();
+		resizeTexts();
 		// System.out.println(entry.getSize());
 		JScrollBar sb = ((JScrollPane) textArea.getParent().getParent()).getVerticalScrollBar();
 		sb.setValue(sb.getMaximum());
+    }
+    
+    void resizeTexts() {
+		// attempts to fix sizing of messages when text area gets resized
+		// sort of works so good enough for my example
+		int areaWidth = textArea.getSize().width;
+		int cc = textArea.getComponents().length;
+		if (cc > 1) {
+		    // if we have more than 1 text item
+		    Component test = textArea.getComponent(cc - 2);
+		    // check if the test width is different than our container
+		    if (areaWidth != test.getWidth()) {
+				// if so let's try to resize all the components to be the same width
+				for (Component c : textArea.getComponents()) {
+				    Dimension current = c.getSize();
+				    Dimension updated = new Dimension(areaWidth, current.height);
+				    c.setPreferredSize(updated);
+				    c.setMinimumSize(updated);
+				    c.setMaximumSize(updated);
+				}
+		    }
+		}
     }
 
 
@@ -312,7 +356,7 @@ public class ClientUI extends JFrame implements Event {
 		log.log(Level.INFO, String.format("%s: %s", clientName, message));
 		addClient(clientName);
 		if (message != null && !message.isBlank()) {
-		    self.addMessage(String.format("%s: %s", clientName, message));
+		    self.addMessage(String.format("%s: %s", clientName, message), false);
 		}
     }
 
@@ -325,7 +369,7 @@ public class ClientUI extends JFrame implements Event {
 		    if (u.getName() == clientName) {
 				removeClient(u);
 				iter.remove();
-				self.addMessage(String.format("%s: %s", clientName, message));
+				self.addMessage(String.format("%s: %s", clientName, message), false);
 				break;
 		    }
 	
@@ -335,13 +379,13 @@ public class ClientUI extends JFrame implements Event {
     @Override
     public void onMessageReceive(String clientName, String message) {
 		log.log(Level.INFO, String.format("%s: %s", clientName, message));
-		self.addMessage(String.format("%s: %s", clientName, message));
+		self.addMessage(String.format("%s: %s", clientName, message), false);
     }
     
     @Override
     public void onCommandOutputReceive(String message) {
 		log.log(Level.INFO, message);
-		self.addMessage(message);
+		self.addMessage(message, true);
     }
 
     @Override

@@ -12,12 +12,22 @@ public class Room implements AutoCloseable {
 	private final static Logger log = Logger.getLogger(Room.class.getName());
 	private static SocketServer server;
 	private String name;
+	private Random rng = new Random();
+	
+	//For text processing:
+	String[] characters = {"~", "\\*", "-"};
+	String[] tags = {"i", "b", "strike"};
 	
 	//commands
 	private final static String COMMAND_TRIGGER = "/";
 	private final static String CREATE_ROOM = "createroom";
 	private final static String JOIN_ROOM = "joinroom";
 	private final static String FLIP = "flip";
+	private final static String ROLL = "roll";
+	private final static String RED = "red";
+	private final static String GREEN = "green";
+	private final static String BLUE = "blue";
+	
 	
 	public Room(String name) {
 		this.name = name;
@@ -93,32 +103,43 @@ public class Room implements AutoCloseable {
 		boolean wasCommand = false;
 		try {
 		    if (message.indexOf(COMMAND_TRIGGER) > -1) {
-			String[] comm = message.split(COMMAND_TRIGGER);
-			log.log(Level.INFO,message);
-			String part1 = comm[1];
-			String[] comm2 = part1.split(" ");
-			String command = comm2[0];
-			if (command != null) {
-			    command = command.toLowerCase();
-			}
-			String roomName;
-			switch (command) {
-				case CREATE_ROOM:
-				    roomName = comm2[1];
-				    if (server.createNewRoom(roomName)) {
-					joinRoom(roomName, client);
-				    }
-				    wasCommand = true;
-				    break;
-				case JOIN_ROOM:
-				    roomName = comm2[1];
-				    joinRoom(roomName, client);
-				    wasCommand = true;
-				    break;
-				case FLIP:
-					flip(client);
-					wasCommand = true;
-					break;
+				String[] comm = message.split(COMMAND_TRIGGER);
+				log.log(Level.INFO,message);
+				String part1 = comm[1];
+				String[] comm2 = part1.split(" ");
+				String command = comm2[0];
+				if (command != null) {
+				    command = command.toLowerCase();
+				}
+				String roomName;
+				switch (command) {
+					case CREATE_ROOM:
+					    roomName = comm2[1];
+					    if (server.createNewRoom(roomName)) {
+					    	joinRoom(roomName, client);
+					    }
+					    wasCommand = true;
+					    break;
+					case JOIN_ROOM:
+					    roomName = comm2[1];
+					    joinRoom(roomName, client);
+					    wasCommand = true;
+					    break;
+					case FLIP:
+						flip(client);
+						wasCommand = true;
+						break;
+					case ROLL:
+						roll(comm2[1], client);
+						wasCommand = true;
+						break;
+					case GREEN:
+					case BLUE:
+					case RED:
+						message = colorText(command, message);
+						sendMessage(client, message);
+						wasCommand = true;
+						break;
 				}
 		    }
 		}
@@ -128,8 +149,39 @@ public class Room implements AutoCloseable {
 		return wasCommand;
     }
     
+    protected String colorText(String command, String message) {
+    	return message.replace("/" + command, "<span color=" + command + ">");
+    }
+    
+    protected void roll(String dice, ServerThread client) {
+    	String outputMessage = "";
+    	try {
+	    	String[] args;
+	    	args = dice.split("[d+]");
+	    	
+	    	int dieCount = Integer.parseInt(args[0]);
+	    	int dieSize = Integer.parseInt(args[1]);
+	    	int modifier = 0;
+	    	if (args.length == 3) {
+	    		modifier = Integer.parseInt(args[2]);
+	    	}
+	    	int result = 0;
+	    	for (int i = 0; i < dieCount; i++) {
+	    		result += rng.nextInt(dieSize) + 1;
+	    	}
+	    	result += modifier;
+	    	outputMessage = client.getClientName() + " rolls " + dice + ": " + result;
+    	}
+    	catch (IllegalArgumentException e) {
+    		outputMessage = "Invalid roll syntax";
+    	}
+    	catch (Exception e) {
+    		e.printStackTrace();
+    	}
+    broadcastCommandResult(client, outputMessage);	
+    }
+    
     protected void flip(ServerThread client) {
-    	Random rng = new Random();
     	int flipIntResult = rng.nextInt(2);
     	String flipStringResult = "";
     	switch (flipIntResult) {
@@ -178,6 +230,7 @@ public class Room implements AutoCloseable {
 		    // it was a command, don't broadcast
 		    return;
 		}
+		message = processMessageTags(message);
 		Iterator<ServerThread> iter = clients.iterator();
 		while (iter.hasNext()) {
 		    ServerThread client = iter.next();
@@ -187,6 +240,27 @@ public class Room implements AutoCloseable {
 			log.log(Level.INFO,"Removed client " + client.getId());
 		    }
 		}
+    }
+    
+    protected String processMessageTags(String message) {
+		int i = 0;
+		String currentCharacter;
+		String currentTag;
+		int arrayLength = characters.length;
+		
+		for (int j = 0; j < arrayLength; j++ ) {
+			currentCharacter = characters[j];
+			currentTag = tags[j];
+			while (message.indexOf(currentCharacter.substring(currentCharacter.length() - 1)) != -1) {
+				if (i == 0) {
+					message = message.replaceFirst(currentCharacter, "<" + currentTag + ">");			//replaces evenly numbered occurrences of a character with an html tag
+				} else if (i == 1) {
+					message = message.replaceFirst(currentCharacter, "</" + currentTag + ">");			//replaces oddly numbered occurrences of a character with an html close tag
+					i = 0;
+				}
+			}
+		}
+		return message;
     }
     
     public List<String> getRooms() {
