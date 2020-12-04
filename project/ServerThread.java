@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Level;
@@ -20,6 +21,38 @@ public class ServerThread extends Thread {
 	private boolean isRunning = false;
 	private Room currentRoom;
 	private String clientName;
+	protected List<String> muteList = new ArrayList<String>();
+	
+	public boolean unmute(String clientName) {
+		int index = 0;
+		for (String name : muteList) {
+			if (name.equals(clientName)) {
+				muteList.remove(index);
+				log.log(Level.INFO,clientName + " unmuted by " + this.clientName);
+				return true;
+			}
+			index++;
+		}
+		return false;
+	}
+	
+	public boolean mute(String clientName) {
+		if (!isMuted(clientName)) {
+			muteList.add(clientName);
+			log.log(Level.INFO,clientName + " muted by " + this.clientName);
+			return true;
+		} else return false;
+	}
+	
+	public boolean isMuted(String clientName) {
+		for (String name : muteList) {
+			System.out.println(name + " , " + clientName);
+			if (name.equals(clientName)) {
+				return true;
+			}
+		}
+		return false;
+	}
 	
 	public String getClientName() {
 		return clientName;
