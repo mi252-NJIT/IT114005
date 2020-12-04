@@ -27,6 +27,8 @@ public class Room implements AutoCloseable {
 	private final static String RED = "red";
 	private final static String GREEN = "green";
 	private final static String BLUE = "blue";
+	private final static String MUTE = "mute";
+	private final static String UNMUTE = "unmute";
 	
 	
 	public Room(String name) {
@@ -112,6 +114,7 @@ public class Room implements AutoCloseable {
 				    command = command.toLowerCase();
 				}
 				String roomName;
+				String commandOutput = "";
 				switch (command) {
 					case CREATE_ROOM:
 					    roomName = comm2[1];
@@ -126,11 +129,33 @@ public class Room implements AutoCloseable {
 					    wasCommand = true;
 					    break;
 					case FLIP:
-						flip(client);
+						commandOutput = flip(client);
+						sendCommandResult(client, commandOutput);	
 						wasCommand = true;
 						break;
 					case ROLL:
-						roll(comm2[1], client);
+						commandOutput = roll(comm2[1], client);
+						sendCommandResult(client, commandOutput);	
+						wasCommand = true;
+						break;
+					case MUTE:
+						boolean muted = client.mute(comm2[1]);
+						if (muted) {
+							sendCommandResult(client, "@" + comm2[1] + " " + client.getClientName() + " muted you.");
+							sendCommandResult(client, "@" + client.getClientName() + " muted " + comm2[1]);
+						} else {
+							sendCommandResult(client, "@" + client.getClientName() + " unable to mute " + comm2[1] +": This user is already muted.");
+						}
+						wasCommand = true;
+						break;
+					case UNMUTE:
+						boolean unmuted = client.unmute(comm2[1]);
+						if (unmuted) {
+							sendCommandResult(client, "@" + comm2[1] + " " + client.getClientName() + " unmuted you.");
+							sendCommandResult(client, "@" + client.getClientName() + " unmuted " + comm2[1]);
+						} else {
+							sendCommandResult(client, "@" + client.getClientName() + " unable to unmute " + comm2[1] +": This user is not muted.");
+						}
 						wasCommand = true;
 						break;
 					case GREEN:
@@ -153,7 +178,7 @@ public class Room implements AutoCloseable {
     	return message.replace("/" + command, "<span color=" + command + ">");
     }
     
-    protected void roll(String dice, ServerThread client) {
+    protected String roll(String dice, ServerThread client) {
     	String outputMessage = "";
     	try {
 	    	String[] args;
@@ -178,10 +203,10 @@ public class Room implements AutoCloseable {
     	catch (Exception e) {
     		e.printStackTrace();
     	}
-    broadcastCommandResult(client, outputMessage);	
+    	return outputMessage;
     }
     
-    protected void flip(ServerThread client) {
+    protected String flip(ServerThread client) {
     	int flipIntResult = rng.nextInt(2);
     	String flipStringResult = "";
     	switch (flipIntResult) {
@@ -193,21 +218,51 @@ public class Room implements AutoCloseable {
     			break;
     		default:
     			log.log(Level.INFO, "Error calculating flip result: No cases matched");
-    			return;
+    			return "";
     	}
     	log.log(Level.INFO, "flipped coin for " + client.getClientName());
-    	broadcastCommandResult(client, client.getClientName() + " flips a coin: " + flipStringResult);
+    	return client.getClientName() + " flips a coin: " + flipStringResult;
     	
     }
     
-    protected void broadcastCommandResult(ServerThread client, String message ) {
+    protected void sendCommandResult(ServerThread sender, String message ) {
+    	//TODO reduce redundant code by finding a way to merge this method into the sendMessage method
+    	
+    	/* Unlike sendMessage(), this method does not send a private message back to the sender.
+    	 * This is because in some cases such as the mute command, the sender and the target of
+    	 * the command will need to see different messages.
+    	 * */
+    	
 		Iterator<ServerThread> iter = clients.iterator();
+		
+		boolean isDM = false;
+		String recipient = "";
+		try {
+			if ( message.substring(0, 1).equals("@")) {									//Checks if the message is a private message
+				int messageStart = message.indexOf(" ");
+				isDM = true;
+				recipient = message.substring(1, messageStart);
+				message = message.substring(messageStart);
+			}
+		}
+		catch (Exception e) {
+			log.log(Level.INFO,"Invalid DM");
+			return;
+		}
+		
 		while (iter.hasNext()) {
-		    ServerThread c = iter.next();
-		    boolean messageSent = c.sendCommandOutput(client.getClientName(), message);
-		    if (!messageSent) {
-				iter.remove();
-				log.log(Level.INFO, "Removed client " + c.getId());
+			ServerThread client = iter.next();
+		    if (!client.isMuted(sender.getClientName()) 							//Send message if the current client is not muted  																
+			    && (																//AND at least one of the following is true:
+			    		!isDM 														//The message is not a private message
+			    		|| client.getClientName().equals(recipient) 				//The current client is the intended recipient of the message
+			    	)																
+			    ) {
+			    boolean messageSent = client.sendCommandOutput(sender.getClientName(), message);
+			    if (!messageSent) {
+					iter.remove();
+					log.log(Level.INFO, "Removed client " + client.getId());
+			    }
 		    }
 		}
     }
@@ -223,6 +278,8 @@ public class Room implements AutoCloseable {
 		    }
 		}
     }
+    
+
 	
     protected void sendMessage(ServerThread sender, String message) {
 		log.log(Level.INFO,getName() + ": Sending message to " + clients.size() + " clients");
@@ -230,14 +287,37 @@ public class Room implements AutoCloseable {
 		    // it was a command, don't broadcast
 		    return;
 		}
+		boolean isDM = false;
+		String recipient = "";
+		try {
+			if ( message.substring(0, 1).equals("@")) {									//Checks if the message is a private message
+				int messageStart = message.indexOf(" ");
+				isDM = true;
+				recipient = message.substring(1, messageStart);
+				message = " (DM@" + recipient + "):" + message.substring(messageStart);
+			}
+		}
+		catch (Exception e) {
+			log.log(Level.INFO,"Invalid DM");
+			return;
+		}
+		
 		message = processMessageTags(message);
 		Iterator<ServerThread> iter = clients.iterator();
 		while (iter.hasNext()) {
 		    ServerThread client = iter.next();
-		    boolean messageSent = client.send(sender.getClientName(), message);
-		    if (!messageSent) {
-			iter.remove();
-			log.log(Level.INFO,"Removed client " + client.getId());
+		    if (!client.isMuted(sender.getClientName()) 							//Send message if the current client is not muted  																
+		    	&& (																//AND at least one of the following is true:
+		    			!isDM 														//The message is not a private message
+		    			|| client.getClientName().equals(recipient) 				//The current client is the intended recipient of the message
+		    			|| sender.getClientName().equals(client.getClientName())	//The current client is the sender
+		    		)
+		    	) {
+		    	boolean messageSent = client.send(sender.getClientName(), message);
+			    if (!messageSent) {
+					iter.remove();
+					log.log(Level.INFO,"Removed client " + client.getId());
+			    }
 		    }
 		}
     }
@@ -254,6 +334,7 @@ public class Room implements AutoCloseable {
 			while (message.indexOf(currentCharacter.substring(currentCharacter.length() - 1)) != -1) {
 				if (i == 0) {
 					message = message.replaceFirst(currentCharacter, "<" + currentTag + ">");			//replaces evenly numbered occurrences of a character with an html tag
+					i++;
 				} else if (i == 1) {
 					message = message.replaceFirst(currentCharacter, "</" + currentTag + ">");			//replaces oddly numbered occurrences of a character with an html close tag
 					i = 0;
