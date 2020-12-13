@@ -1,7 +1,9 @@
 
 package client;
 
-import java.awt.BorderLayout; 
+import utils.Countdown;
+
+import java.awt.BorderLayout;  
 import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -396,6 +398,12 @@ public class ClientUI extends JFrame implements Event {
     public void onMessageReceive(String clientName, String message) {
 		log.log(Level.INFO, String.format("%s: %s", clientName, message));
 		self.addMessage(String.format("%s: %s", clientName, message), false);
+		for (User user : self.users) {
+			if (clientName.equals(user.getName())) {
+				user.highlight(5);
+			}
+		}
+		
     }
     
     @Override
