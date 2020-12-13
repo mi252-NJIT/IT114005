@@ -42,6 +42,7 @@ public class ClientUI extends JFrame implements Event {
      * 
      */
     private static final long serialVersionUID = 1L;
+    private ChatLog chatLog = new ChatLog();
     CardLayout card;
     ClientUI self;
     JPanel textArea;
@@ -56,18 +57,34 @@ public class ClientUI extends JFrame implements Event {
     public ClientUI(String title) {
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		menu = new JMenuBar();
+		JMenu optionsMenu = new JMenu("Options");
 		JMenu roomsMenu = new JMenu("Rooms");
 		JMenuItem roomsSearch = new JMenuItem("Search");
+		JMenuItem exportChatLog = new JMenuItem("Export Chat Log");
+		
 		roomsSearch.addActionListener(new ActionListener() {
 		    @Override
 		    public void actionPerformed(ActionEvent e) {
-				System.out.println("clicked");
 				goToPanel("rooms");
 		    }
-	
 		});
+		
+		exportChatLog.addActionListener(new ActionListener() {
+		    @Override
+		    public void actionPerformed(ActionEvent e) {;
+		    	Boolean exported = chatLog.exportLog();
+		    	if (exported) {
+		    		addMessage("Exported Chat Log", true);
+		    	} else {
+		    		addMessage("Failed to Export Chat Log", true);
+		    	}
+		    }
+		});
+		
 		roomsMenu.add(roomsSearch);
+		optionsMenu.add(exportChatLog);
 		menu.add(roomsMenu);
+		menu.add(optionsMenu);
 		windowSize.width *= .8;
 		windowSize.height *= .8;
 		setPreferredSize(windowSize);
@@ -267,11 +284,11 @@ public class ClientUI extends JFrame implements Event {
 
     void addMessage(String str, boolean isCommandOutput) {
 		JEditorPane entry = new JEditorPane();
-		
 		if (isCommandOutput) {
 			entry.setBackground(new Color(235, 235, 235));
 			str = "<b><i>" + str + "</b></i>";
 		}
+		chatLog.log(str);
 		entry.setEditable(false);
 		entry.setContentType("text/html");
 		// entry.setLayout(null);
@@ -293,7 +310,6 @@ public class ClientUI extends JFrame implements Event {
     
     void resizeTexts() {
 		// attempts to fix sizing of messages when text area gets resized
-		// sort of works so good enough for my example
 		int areaWidth = textArea.getSize().width;
 		int cc = textArea.getComponents().length;
 		if (cc > 1) {
@@ -301,7 +317,7 @@ public class ClientUI extends JFrame implements Event {
 		    Component test = textArea.getComponent(cc - 2);
 		    // check if the test width is different than our container
 		    if (areaWidth != test.getWidth()) {
-				// if so let's try to resize all the components to be the same width
+				// if so try to resize all the components to be the same width
 				for (Component c : textArea.getComponents()) {
 				    Dimension current = c.getSize();
 				    Dimension updated = new Dimension(areaWidth, current.height);

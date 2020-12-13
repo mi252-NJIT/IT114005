@@ -59,6 +59,16 @@ public class Room implements AutoCloseable {
 		}
 	}
 	
+	protected synchronized List<String> getMuteLists() {
+		List<String> muteLists = new ArrayList<String>();
+		String muteList;
+		for (ServerThread client : clients) {
+			muteList = client.getMuteList();
+			muteLists.add(muteList);
+		}
+		return muteLists;
+	}
+	
     private void updateClientList(ServerThread client) {
 		Iterator<ServerThread> iter = clients.iterator();
 		while (iter.hasNext()) {

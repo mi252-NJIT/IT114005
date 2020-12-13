@@ -1,12 +1,17 @@
 package server;
-import java.io.IOException;   
+import java.io.IOException;    
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Scanner;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileWriter;
+import java.io.IOException;
 
 
 public class SocketServer {
@@ -39,6 +44,8 @@ public class SocketServer {
 					prelobby.addClient(thread);
 					isolatedPrelobbies.add(prelobby);
 					log.log(Level.INFO,"client added to clients pool");
+					//TODO Make it so the mute list saves every 10 minutes or at server shutdown instead of every time a client joins
+					saveMuteLists();
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
@@ -56,6 +63,64 @@ public class SocketServer {
 		}
 				
 	}
+	
+	private synchronized void saveMuteLists() {
+		try {
+			String output = "";
+			String[] currentMuteListArray;
+			String currentMuteList;	
+			List<String> currentRoomMuteLists;
+			//Gets each user's mute list from each room, then writes them all on a different line to a file called MuteLists.txt
+			for (Room room : rooms) {
+				currentRoomMuteLists = room.getMuteLists();
+				for (String muteList : currentRoomMuteLists) {
+					output += muteList + "\n";
+					
+				}
+				File muteLists = new File("MuteLists.txt");
+				Scanner scanner = new Scanner(muteLists);
+				//While loop goes through each entry that was already in the MuteLists.txt file and saves it to write back in if there isn't a new entry to replace it
+				while (scanner.hasNext()) {
+					currentMuteList = scanner.nextLine();
+					currentMuteListArray = currentMuteList.split(": ");
+					if (output.indexOf(currentMuteListArray[0]) == -1) {
+						output += currentMuteList + "\n";
+					}
+				}
+				
+				
+				FileWriter writer = new FileWriter(muteLists);
+				writer.write(output);
+				writer.close();
+			}
+				
+			} catch (Exception e) {
+				e.printStackTrace();
+
+		}
+	}
+	
+	protected synchronized String[] loadMuteList(String clientName) throws FileNotFoundException {
+		File muteLists = new File("MuteLists.txt");
+		//currentMuteListArray will contain the client's name in index 0 and the name of their muted clients in index 1
+		String[] currentMuteListArray;
+		String currentMuteList;	
+		String[] output = new String[0];
+		Scanner scanner = new Scanner(muteLists);
+		while (scanner.hasNext()) {
+			currentMuteList = scanner.nextLine();
+			currentMuteListArray = currentMuteList.split(": ");
+			System.out.println(currentMuteListArray[0] + " " + clientName);
+			if (currentMuteListArray[0].equals(clientName)) {
+				output = currentMuteListArray[1].split(", ");
+				System.out.println(output.toString());
+			}
+		}
+		scanner.close();
+		return output;
+	}
+	
+	
 	
 	protected void cleanupRoom(Room r) {
 		isolatedPrelobbies.remove(r);
@@ -110,6 +175,15 @@ public class SocketServer {
 	
 	protected void joinLobby(ServerThread client) {
 		Room prelobby = client.getCurrentRoom();
+		try {
+			//Tries to get the user's saved mute list if it exists
+			String[] muteList = loadMuteList(client.getClientName());
+			for (String clientName : muteList) {
+				client.mute(clientName);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 		if (joinRoom(LOBBY, client)) {
 			prelobby.removeClient(client);
 			log.log(Level.INFO,"Added " + client.getClientName() + " to Lobby; Prelobby should self destruct");
