@@ -1,6 +1,6 @@
 package server;
 
-import java.awt.Point;
+import java.awt.Point; 
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -24,14 +24,10 @@ public class ServerThread extends Thread {
 	protected List<String> muteList = new ArrayList<String>();
 	
 	public boolean unmute(String clientName) {
-		int index = 0;
-		for (String name : muteList) {
-			if (name.equals(clientName)) {
-				muteList.remove(index);
-				log.log(Level.INFO,clientName + " unmuted by " + this.clientName);
-				return true;
-			}
-			index++;
+		if (isMuted(clientName)) {
+			muteList.remove(clientName);
+			log.log(Level.INFO,clientName + " unmuted by " + this.clientName);
+			return true;
 		}
 		return false;
 	}
@@ -46,13 +42,22 @@ public class ServerThread extends Thread {
 	
 	public boolean isMuted(String clientName) {
 		for (String name : muteList) {
-			System.out.println(name + " , " + clientName);
 			if (name.equals(clientName)) {
 				return true;
 			}
 		}
 		return false;
 	}
+	
+	public String getMuteList() {
+		String output = this.clientName + ": ";
+		for (String name : muteList) {
+			output += name + ", ";
+		}
+		return output;
+	}
+	
+	
 	
 	public String getClientName() {
 		return clientName;
